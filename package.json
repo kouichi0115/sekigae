@@ -1,0 +1,10 @@
+{
+  "name": "sekigae",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "小中学校向け 席替えWEBアプリ",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

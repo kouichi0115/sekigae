@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>せきがえ</title>
+  <meta name="description" content="小中学校向けの席替えアプリ。名簿と座席を設定して、条件つきでランダムに席替えできます。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='6' width='22' height='22' rx='4' fill='%23f59e0b'/%3E%3Crect x='36' y='6' width='22' height='22' rx='4' fill='%233b82f6'/%3E%3Crect x='6' y='36' width='22' height='22' rx='4' fill='%233b82f6'/%3E%3Crect x='36' y='36' width='22' height='22' rx='4' fill='%23f59e0b'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1 class="logo">せきがえ</h1>
+    <nav class="tabs" aria-label="メニュー">
+      <button type="button" data-tab="shuffle">席替え</button>
+      <button type="button" data-tab="roster">名簿</button>
+      <button type="button" data-tab="layout">座席</button>
+      <button type="button" data-tab="rules">条件</button>
+      <button type="button" data-tab="history">履歴</button>
+      <button type="button" data-tab="settings">保存</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 席替え -->
+    <section class="tab" id="tab-shuffle" hidden>
+      <div class="toolbar">
+        <button type="button" id="btn-shuffle" class="btn primary big">席替えスタート！</button>
+        <button type="button" id="btn-commit" class="btn">この席で決定</button>
+        <span class="spacer"></span>
+        <label class="check"><input type="checkbox" id="opt-anim"> 演出</label>
+        <select id="opt-orient" aria-label="表示の向き">
+          <option value="students">児童から見た図（黒板が上）</option>
+          <option value="teacher">先生から見た図（教卓が下）</option>
+        </select>
+        <button type="button" id="btn-full" class="btn">全画面</button>
+        <button type="button" id="btn-print" class="btn">印刷</button>
+      </div>
+      <div id="messages" aria-live="polite"></div>
+      <div id="stage">
+        <div class="stage-head">
+          <input id="class-name" class="class-name" placeholder="クラス名（例：5年2組）" aria-label="クラス名">
+          <span id="stage-date" class="stage-date"></span>
+          <span class="spacer"></span>
+          <button type="button" id="btn-shuffle-full" class="btn primary only-full">席替え</button>
+          <button type="button" id="btn-exit-full" class="btn only-full">もどる</button>
+        </div>
+        <div id="board"></div>
+        <p id="stage-empty" class="stage-empty" hidden></p>
+      </div>
+      <p class="hint">席を2つ順番にタップすると、手で入れ替えられます。</p>
+    </section>
+
+    <!-- 名簿 -->
+    <section class="tab" id="tab-roster" hidden>
+      <h2>名簿</h2>
+      <p id="roster-count" class="summary"></p>
+      <div class="table-wrap">
+        <table class="roster">
+          <thead><tr><th>番号</th><th>名前</th><th>性別</th><th></th></tr></thead>
+          <tbody id="roster-body"></tbody>
+        </table>
+      </div>
+      <div class="row-buttons">
+        <button type="button" id="btn-add-student" class="btn">＋ 1人追加</button>
+        <button type="button" id="btn-sample" class="btn subtle">お試し用の名簿を入れる</button>
+        <button type="button" id="btn-clear-roster" class="btn danger subtle">名簿をすべて消す</button>
+      </div>
+
+      <h3>まとめて入力</h3>
+      <p class="note">1行に1人ずつ「番号, 名前, 性別」で入力します（番号・性別は省略可）。Excelからコピーして貼り付けもできます。</p>
+      <textarea id="bulk-input" rows="6" placeholder="1, 山田 太郎, 男&#10;2, 鈴木 花子, 女&#10;3, 佐藤 一郎, 男"></textarea>
+      <div class="row-buttons">
+        <button type="button" id="btn-bulk-replace" class="btn primary">名簿を置きかえる</button>
+        <button type="button" id="btn-bulk-append" class="btn">うしろに追加する</button>
+        <label class="btn file">CSVファイルを読み込む<input type="file" id="csv-file" accept=".csv,.txt,text/csv,text/plain" hidden></label>
+      </div>
+    </section>
+
+    <!-- 座席レイアウト -->
+    <section class="tab" id="tab-layout" hidden>
+      <h2>座席レイアウト</h2>
+      <div class="form-row">
+        <label>列の数（前→後ろ）<input type="number" id="layout-rows" min="1" max="12"></label>
+        <label>1列の席数（左→右）<input type="number" id="layout-cols" min="1" max="12"></label>
+        <button type="button" id="btn-layout-reset" class="btn subtle">すべての席を使う</button>
+      </div>
+      <p id="layout-count" class="summary"></p>
+      <p class="note">使わない席をタップすると「×」になります（もう一度タップで戻ります）。図は児童から見た向きです。</p>
+      <div id="layout-board"></div>
+    </section>
+
+    <!-- 条件 -->
+    <section class="tab" id="tab-rules" hidden>
+      <h2>条件</h2>
+      <div class="card">
+        <label class="check"><input type="checkbox" id="rule-checker"> 男女交互（市松模様）にする</label>
+        <label class="check"><input type="checkbox" id="rule-same-seat"> 前回と同じ席にしない</label>
+        <label class="check"><input type="checkbox" id="rule-same-neighbor"> 前回となりだった人と、となりにしない</label>
+        <p class="note">「前回」は履歴に保存した一番新しい席です。</p>
+      </div>
+
+      <div class="card">
+        <h3>前の方の席にする</h3>
+        <p class="note">視力や配慮が必要な児童など。</p>
+        <div class="form-row">
+          <select id="front-student" aria-label="児童"></select>
+          <select id="front-rows" aria-label="何列目まで"></select>
+          <button type="button" id="btn-front-add" class="btn">追加</button>
+        </div>
+        <ul id="front-list" class="rule-list"></ul>
+      </div>
+
+      <div class="card">
+        <h3>席を固定する</h3>
+        <div class="form-row">
+          <select id="fixed-student" aria-label="児童"></select>
+          <select id="fixed-seat" aria-label="席"></select>
+          <button type="button" id="btn-fixed-add" class="btn">追加</button>
+        </div>
+        <ul id="fixed-list" class="rule-list"></ul>
+      </div>
+
+      <div class="card">
+        <h3>離す</h3>
+        <p class="note">2人のあいだを指定した席数以上あけます。1席＝となり・前後・ななめにしない。</p>
+        <div class="form-row">
+          <select id="apart-a" aria-label="1人目"></select>
+          <span>と</span>
+          <select id="apart-b" aria-label="2人目"></select>
+          <span>のあいだを</span>
+          <select id="apart-n" aria-label="席数"></select>
+          <span>席以上あける</span>
+          <button type="button" id="btn-apart-add" class="btn">追加</button>
+        </div>
+        <ul id="apart-list" class="rule-list"></ul>
+      </div>
+
+      <div class="card">
+        <h3>近づける</h3>
+        <p class="note">2人を指定した席数以内にします。1席以内＝となり・前後・ななめのどれか。</p>
+        <div class="form-row">
+          <select id="near-a" aria-label="1人目"></select>
+          <span>と</span>
+          <select id="near-b" aria-label="2人目"></select>
+          <span>を</span>
+          <select id="near-n" aria-label="席数"></select>
+          <span>席以内にする</span>
+          <button type="button" id="btn-near-add" class="btn">追加</button>
+        </div>
+        <ul id="near-list" class="rule-list"></ul>
+      </div>
+    </section>
+
+    <!-- 履歴 -->
+    <section class="tab" id="tab-history" hidden>
+      <h2>履歴</h2>
+      <p class="note">席替え画面の「この席で決定」で保存されます。</p>
+      <div id="history-list"></div>
+    </section>
+
+    <!-- 保存 -->
+    <section class="tab" id="tab-settings" hidden>
+      <h2>データの保存</h2>
+      <div class="card">
+        <p>データはこの端末のブラウザの中にだけ保存されます（インターネットには送信されません）。別の端末で使うときや、念のための控えには「ファイルに書き出す」を使ってください。</p>
+        <div class="row-buttons">
+          <button type="button" id="btn-export" class="btn primary">ファイルに書き出す</button>
+          <label class="btn file">ファイルから読み込む<input type="file" id="import-file" accept=".json,application/json" hidden></label>
+        </div>
+      </div>
+      <div class="card">
+        <h3>すべてのデータを消す</h3>
+        <p class="note">名簿・座席・条件・履歴をすべて消します。元に戻せません。</p>
+        <button type="button" id="btn-reset-all" class="btn danger">すべて消す</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
